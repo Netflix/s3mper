@@ -207,7 +207,7 @@ public abstract class ConsistentListingAspect {
                 }
             }
             
-            metastore.add(path, pjp.getSignature().getName().contains("mkdir"));
+            metastore.add(path, trackDirectories && pjp.getSignature().getName().contains("mkdir"));
         } catch (TimeoutException t) {
             log.error("Timeout occurred adding path to metastore: " + path, t);
             
