@@ -106,7 +106,7 @@ The SQS Queues used for alerting need to be created by hand (no tool exists to c
 
 ```
 s3mper.alert.queue
-s3mper.sqs.queue
+s3mper.timeout.queue
 s3mper.notification.queue
 ```
 Messages will be delivered to these queues when a listing inconsistency is detected.
