@@ -119,7 +119,7 @@ public class DynamoDBMetastore implements FileSystemMetastore {
         
         deleteMarkerEnabled = conf.getBoolean("s3mper.metastore.deleteMarker.enabled", false);
         
-        boolean checkTableExists = conf.getBoolean("s3mper.metastore.check", false);
+        boolean checkTableExists = conf.getBoolean("s3mper.metastore.create", false);
         
         if(checkTableExists) {
             ListTablesResult tables = db.listTables();

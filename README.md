@@ -1,14 +1,14 @@
 S3mper
 =====
 
-S3mper is a library that provides an additinal layer of consistency checking on top of Amazon's S3 index through use of a consistent, secondary index.
+S3mper is a library that provides an additional layer of consistency checking on top of Amazon's S3 index through use of a consistent, secondary index.
 
 Overview
 --------
 
-S3mper leverdges [Aspect Orriented Programming](http://en.wikipedia.org/wiki/Aspect-oriented_programming) and is implemented with [ApsectJ](http://eclipse.org/aspectj/ "ApectJ") to advise implementations of the Hadoop FileSystem (primarily the NativeS3FileSystem implementation) with additional logic to crosscheck a secondary index for consistency.  
+S3mper leverages [Aspect Oriented Programming](http://en.wikipedia.org/wiki/Aspect-oriented_programming) and is implemented with [ApsectJ](http://eclipse.org/aspectj/ "ApectJ") to advise implementations of the Hadoop FileSystem (primarily the NativeS3FileSystem implementation) with additional logic to crosscheck a secondary index for consistency.  
 
-The default implementation of the secondary index uses DynamoDB because of the speed, consistency, and availablility guarentees that service provides.  The table schema is designed to be light-weight and fast so as to not impare the performance of the filesystem.
+The default implementation of the secondary index uses DynamoDB because of the speed, consistency, and availability guarantees that service provides.  The table schema is designed to be light-weight and fast so as to not impair the performance of the file system.
 
 There are two logical indexes[^1] used in the table structure to access path and file information.  The first index is path based for lookup during listing operations.  The second index is timeseries based so that entries can be expired from both indexes without having to scan the entire table.
 
@@ -19,18 +19,18 @@ There are two logical indexes[^1] used in the table structure to access path and
 | //\<bucket\>/\<path\> | \<filename\>| \<timestamp\> | \<flag\>| \<flag\> |   N/A   |     N/A     |
 | epoch[^2] | \<timestamp+entropy\>|   N/A | N/A | N/A | //\<bucket\>/\<path\> | \<filename\> |
 
-The purpose of this table scheme is to provide range query operaitons for directory listings and for timeseries deletes.  
+The purpose of this table scheme is to provide range query operations for directory listings and for timeseries deletes.  
 
 
 
-[^1]: The indexes are not implemented using DynamoDb Secondary Indexes due to constrains
+[^1]: The indexes are not implemented using DynamoDB Secondary Indexes due to constrains
 [^2]: This is a static value _'epoch'_ 
 
 
 [Building](id:build)
 --------
 
-A gradle wrapper is used to build s3mper and can be run without addiitonal tools.  Edit the `build.gradle` to the appropriate version of hadoop and build with the following command. 
+A gradle wrapper is used to build s3mper and can be run without additional tools.  Edit the `build.gradle` to the appropriate version of hadoop and build with the following command. 
 
 ```
 $ ./gradlew release
@@ -79,7 +79,7 @@ S3mper is disabled by default and must be explicitly enabled with the following 
 
 ##### Changes to `$HADOOP_HOME/conf/mapred-site.xml` [Optional]
 
-The child processes of the task trackers need to have the java agent included in the jvm options as well.  If you updated the hadoop-env.sh on all hosts, this step shouldn't be necessary and may cause the jvm to fail to start if there are two of the same java agent commands.  The following can be added to the `mapred-site.xml` to add the java agent if the child processes don't have the agent enabled (assumes hadoop is installed in `/opt/hadoop`):
+The child processes of the task trackers need to have the java agent included in the jvm options as well.  If you updated the hadoop-env.sh on all hosts, this step should not be necessary and may cause the jvm to fail to start if there are two of the same java agent commands.  The following can be added to the `mapred-site.xml` to add the java agent if the child processes don't have the agent enabled (assumes hadoop is installed in `/opt/hadoop`):
 
 ```
 <property><name>mapred.child.java.opts</name><value>--javaagent:/opt/hadoop/lib/aspectjweaver-1.7.3.jar</value></property>
@@ -96,12 +96,30 @@ log4j.logger.com.netflix.bdp.s3mper=trace
  
 Configuration
 -------------
+##### Creating the DynamoDB Table
+
+The easiest way to create the initial metastore in DynamoDB is to set `s3mper.metastore.create=true` and execute a command against the metastore.  This will create the table in DynamoDB with the proper configuration.  The read/write unit capacity can be configured via the AWS DyanmoDB console.
+
+##### Creating SQS Queues
+
+The SQS Queues used for alerting need to be created by hand (no tool exists to create them automatically).  The default queue names are:
+
+```
+s3mper.alert.queue
+s3mper.sqs.queue
+s3mper.notification.queue
+```
+Messages will be delivered to these queues when a listing inconsistency is detected.
+
+
+##### Configuration Options
 
 S3mper supports a wide variety of options that can be controlled using properties from within a Pig/Hive/Hadoop job.  These options manage how s3mper will respond to a in consistent listing when it occurs.  The table below describes these options:
 
 Property | Default | Description
 -------- | ------- | -----------
 s3mper.disable|FALSE|"Disables all functionality of s3mper. The aspect will still be woven, but it will not interfere with normal behavior."
+s3mper.metastore.create|FALSE|Create the metastore if it doesn't exist. Note that this isn't an atomic operation so commands may fail until the metastore is fully initialized.  It's best to create the metastore prior to running any commands.
 s3mper.failOnError|FALSE|"If true, any inconsistent list operation will result in a S3ConsistencyException being thrown, logging an error, and notifying CloudWatch. If false, the exception will not be thrown but the log and CloudWatch metric will still be sent."
 s3mper.task.failOnError|FALSE|Controls whether a M/R Task (i.e. a Child TaskTracker process) will fail if the task fails a consistency check. Most queries only check at the start of the query.
 s3mper.listing.recheck.count|15|How many times to recheck the listing. This works in combination with 's3mper.listing.recheck.period' to control how long to wait before failing/proceeding with the query.
@@ -111,9 +129,10 @@ s3mper.listing.task.recheck.period|0|How long to wait (in Milliseconds) between 
 s3mper.metastore.deleteMarker.enabled|FALSE|"Use a delete marker instead of removing the entry from the metastore. This will fix the second type of consistency problem where a file is deleted, but the listing still shows that it is available by removing those deleted files from the listing."
 s3mper.listing.directory.tracking| FALSE | Track directory creation/deletion in the metastore.
 s3mper.listing.delist.deleted|TRUE|"Removes files from the listing that have delete markers applied to them. If delete markers is enabled, this should also be enabled or the listing will expect files that are actually deleted."
-s3mper.metastore.impl|<see code>|The fully qualified class with metastore implementation.
-fs.<scheme>.awsAccessKeyId||Key to use for DynamoDB access
-fs.<scheme>.awsSecretAccessKey||Secret to use for DynamoDB access
+s3mper.metastore.impl|\<see code\>|The fully qualified class with metastore implementation.
+s3mper.dispatcher.impl|\<see code\>|The fully qualified class with alert dispatcher implementation.
+fs.\<scheme\>.awsAccessKeyId||Key to use for DynamoDB access
+fs.\<scheme\>.awsSecretAccessKey||Secret to use for DynamoDB access
 s3mper.override.awsAccessKeyId||Key to use for DynamoDB access if different from the default key
 s3mper.override.awsSecretAccessKey||Secret to use for DynamoDB access if different from the default key
 s3mper.metastore.read.units|500|The number of read units to provision on create. Only used if the table does not exist.
@@ -123,7 +142,7 @@ s3mper.metastore.name|ConsistentListingMetastore|The name of the DynamoDB table 
 Verification
 ------------
 
-A unit test is included with the library that exercises the advised commands on the file system.  Build the test jars with the command `./gradlew testjar` and include the `s3mpter-test.jar` in the classpath.  Use the `scripts/verify-consistent-listing.sh` command to run the unit tests.  
+A unit test is included with the library that exercises the advised commands on the file system.  Build the test jars with the command `./gradlew testJar` and include the `s3mpter-test.jar` in the classpath.  Use the `scripts/verify-consistent-listing.sh` command to run the unit tests.  
 
 __Note:__ you may need to modify some paths in the script to point to the correct directories.
 
