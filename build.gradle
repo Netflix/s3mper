@@ -1,0 +1,108 @@
+/*
+ *
+ *  Copyright 2013 Netflix, Inc.
+ *
+ *     Licensed under the Apache License, Version 2.0 (the "License");
+ *     you may not use this file except in compliance with the License.
+ *     You may obtain a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *     Unless required by applicable law or agreed to in writing, software
+ *     distributed under the License is distributed on an "AS IS" BASIS,
+ *     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *     See the License for the specific language governing permissions and
+ *     limitations under the License.
+ *
+ */
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'findbugs'
+
+archivesBaseName = 's3mper'
+version = '1.0.0'
+group = 'com.netflix.bdp'
+
+sourceCompatibility = '1.6'
+targetCompatibility = '1.6'
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+if (!hasProperty('mainClass')) {
+    ext.mainClass = ''
+}
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+}
+
+tasks.withType(Compile) {
+    options.compilerArgs << "-Xlint:-deprecation"
+} 
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile 'org.apache.hadoop:hadoop-core:1.0.3'
+    compile 'log4j:log4j:1.2.17'
+    compile 'com.amazonaws:aws-java-sdk:1.3.26'
+    compile 'org.aspectj:aspectjtools:1.7.3'
+    compile 'org.aspectj:aspectjweaver:1.7.3'
+    compile 'org.aspectj:aspectjrt:1.7.3'
+    compile 'com.google.guava:guava:15.0'
+    compile 'org.apache.commons:commons-io:1.3.2'
+    compile 'org.apache.commons:commons-math:2.2'
+    compile 'commons-cli:commons-cli:1.2'
+    compile 'args4j:args4j:2.0.25'
+    testCompile group: 'junit', name: 'junit', version: '4.10'
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '1.9'
+}
+
+task testJar(type: Jar, dependsOn: compileTestJava) {
+    from sourceSets.test.output
+    archiveName = 's3mper-test.jar'
+}
+
+task stage(type: Copy, dependsOn: [assemble]) {
+    from configurations.runtime
+    from 'build/libs'
+    into "build/release/stage/s3mper-$version/lib"
+    
+    outputs.dir 'build/realease/stage'
+}
+
+task copyScripts(type: Copy) {
+    from 'bin'
+    from 'scripts'
+    into "build/release/stage/s3mper-$version"
+}
+
+task copyDeps(type: Copy) {
+    from configurations.runtime 
+    includes = [ 'aspectjrt*', 'aspectjweaver*' ]     
+    into tasks.jar.destinationDir
+}
+tasks.assemble.dependsOn(copyDeps)
+
+task release(type: Tar, dependsOn: [ stage, copyScripts ] ) {
+    from 'build/release/stage'
+    
+    includes = ["s3mper-$version/*", "s3mper-$version/lib/*"]
+
+    // Set destination directory.
+    destinationDir = file("$buildDir/release")
+
+    // Set filename properties.
+    baseName = archivesBaseName
+    version = version
+    extension = 'tar.gz'
+
+    compression = Compression.GZIP // or Compression.BZIP2
+}

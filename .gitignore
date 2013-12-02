@@ -1,0 +1,8 @@
+/build/
+/.nb-gradle/profiles/private/
+.gradle
+.nb-gradle-properties
+scripts/python/.project
+scripts/python/.pydevproject
+venv
+*.pyc
