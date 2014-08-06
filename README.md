@@ -6,7 +6,7 @@ S3mper is a library that provides an additional layer of consistency checking on
 Overview
 --------
 
-S3mper leverages [Aspect Oriented Programming](http://en.wikipedia.org/wiki/Aspect-oriented_programming) and is implemented with [ApsectJ](http://eclipse.org/aspectj/ "ApectJ") to advise implementations of the Hadoop FileSystem (primarily the NativeS3FileSystem implementation) with additional logic to crosscheck a secondary index for consistency.  
+S3mper leverages [Aspect Oriented Programming](http://en.wikipedia.org/wiki/Aspect-oriented_programming) and is implemented with [AspectJ](http://eclipse.org/aspectj/ "AspectJ") to advise implementations of the Hadoop FileSystem (primarily the NativeS3FileSystem implementation) with additional logic to crosscheck a secondary index for consistency.  
 
 The default implementation of the secondary index uses DynamoDB because of the speed, consistency, and availability guarantees that service provides.  The table schema is designed to be light-weight and fast so as to not impair the performance of the file system.
 
