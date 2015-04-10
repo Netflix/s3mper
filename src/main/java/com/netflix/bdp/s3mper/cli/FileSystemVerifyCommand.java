@@ -23,7 +23,8 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.netflix.bdp.s3mper.common.PathUtil;
 import java.io.BufferedReader;
-import java.io.FileReader;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -69,7 +70,7 @@ public class FileSystemVerifyCommand extends Command {
             ExecutorService executor = Executors.newFixedThreadPool(threads);
             List<Future> futures = new ArrayList<Future>();
             
-            BufferedReader fin = new BufferedReader(new FileReader(file));
+            BufferedReader fin = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF8"));
             
             try {
                 for(String line = fin.readLine(); line != null; line = fin.readLine()) {
