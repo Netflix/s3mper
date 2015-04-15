@@ -114,7 +114,7 @@ public class AlertJanitor {
             }
             
             for(Message m : messages) {
-                fout.write((m.getBody().replaceAll("[\n|\r]", " ")+"\n").getBytes());
+                fout.write((m.getBody().replaceAll("[\n|\r]", " ")+"\n").getBytes("UTF8"));
             }
 
             delete(queue, messages);

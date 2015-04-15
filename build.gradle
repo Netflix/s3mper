@@ -38,7 +38,7 @@ buildscript {
     }
 }
 
-tasks.withType(Compile) {
+tasks.withType(JavaCompile) {
     options.compilerArgs << "-Xlint:-deprecation"
 } 
 
@@ -61,8 +61,12 @@ dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.10'
 }
 
+findbugs {
+    ignoreFailures = true
+}
+
 task wrapper(type: Wrapper) {
-    gradleVersion = '1.9'
+    gradleVersion = '2.2.1'
 }
 
 task testJar(type: Jar, dependsOn: compileTestJava) {
