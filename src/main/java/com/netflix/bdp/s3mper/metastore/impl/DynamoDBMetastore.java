@@ -19,6 +19,8 @@
 
 package com.netflix.bdp.s3mper.metastore.impl;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import com.netflix.bdp.s3mper.common.RetryTask;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.dynamodb.AmazonDynamoDBClient;
@@ -87,7 +89,7 @@ public class DynamoDBMetastore implements FileSystemMetastore {
     static final String LINK_HASH_KEY = "linkPath";
     static final String LINK_RANGE_KEY = "linkFile";
     static final String TIMESERIES_KEY = "epoch";
-    
+
     /**
      * Creates the metastore table in DynamoDB if it doesn't exist with the configured
      * read and write units.

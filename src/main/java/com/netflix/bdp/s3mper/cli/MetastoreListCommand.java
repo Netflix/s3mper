@@ -20,6 +20,8 @@
 package com.netflix.bdp.s3mper.cli;
 
 import com.netflix.bdp.s3mper.metastore.FileInfo;
+import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
+import com.netflix.bdp.s3mper.metastore.Metastore;
 import com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore;
 import java.util.Collections;
 import java.util.List;
@@ -40,7 +42,7 @@ public class MetastoreListCommand extends Command {
             
             conf.set("s3mper.metastore.deleteMarker.enabled", "true");
             
-            DynamoDBMetastore meta = new DynamoDBMetastore();
+            FileSystemMetastore meta = Metastore.getFilesystemMetastore();
             meta.initalize(path.toUri(), conf);
             
             List<FileInfo> files = meta.list(Collections.singletonList(path));

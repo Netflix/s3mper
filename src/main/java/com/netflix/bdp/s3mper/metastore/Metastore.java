@@ -16,31 +16,19 @@
  *
  */
 
-
 package com.netflix.bdp.s3mper.metastore;
 
 import com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore;
 
-import java.net.URI;
-import java.util.List;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-
 /**
- * Describes the basic operations used for FileSystem metastore consistency.
- * 
- * @author dweeks
+ * Provides basic file metadata for the metastore
+ *
+ * @author liljencrantz@spotify.com
  */
-public interface FileSystemMetastore {
-    
-    public void initalize(URI uri, Configuration conf) throws Exception;
-    
-    public List<FileInfo> list(List<Path> path) throws Exception;
-    
-    public void add(Path path, boolean directory) throws Exception;
-    
-    public void delete(Path path) throws Exception;
-    
-    public void close();
+public class Metastore {
+
+    public static FileSystemMetastore getFilesystemMetastore() {
+        return new DynamoDBMetastore();
+    }
 
 }
