@@ -23,7 +23,7 @@ import org.apache.hadoop.fs.Path;
 
 /**
  * Provides basic file metadata for the metastore
- * 
+ *
  * @author dweeks
  */
 public class FileInfo {
@@ -31,11 +31,17 @@ public class FileInfo {
     private Path path;
     private boolean deleted;
     private boolean directory;
-    
+
     public FileInfo(Path path) {
         this.path = path;
         this.deleted = false;
         this.directory = false;
+    }
+
+    public FileInfo(Path path, boolean deleted, boolean directory) {
+        this.path = path;
+        this.deleted = deleted;
+        this.directory = directory;
     }
 
     public Path getPath() {
@@ -61,5 +67,5 @@ public class FileInfo {
     public void setDirectory(boolean directory) {
         this.directory = directory;
     }
-    
+
 }
