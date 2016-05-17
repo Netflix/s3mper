@@ -124,7 +124,19 @@ public class InMemoryMetastoreTest {
         conf.setFloat("s3mper.listing.threshold", 1);
     }
 
-/*  @Test
+    @Test
+    public void testUpdateMetastore() throws Throwable {
+        System.out.println("updateMetastore");
+        Path arg1Path = new Path(testPath + "/update.test");
+        OutputStream fout = deleteFs.create(arg1Path);
+        assertNotNull(fout);
+        fout.close();
+        List<FileInfo> files = meta.list(Collections.singletonList(arg1Path.getParent()));
+        assertEquals(1, files.size());
+        deleteFs.delete(arg1Path, true);
+    }
+
+    /*  @Test
   public void testFileCreateMethods() throws Throwable {
     System.out.println("testFileCreateMethods");
     Path file = new Path(testPath + "/create-methods.test");
@@ -238,17 +250,6 @@ public class InMemoryMetastoreTest {
 
 
 
-  @Test
-  public void testUpdateMetastore() throws Throwable {
-    System.out.println("updateMetastore");
-    Path arg1Path = new Path(testPath + "/update.test");
-    OutputStream fout = deleteFs.create(arg1Path);
-    assertNotNull(fout);
-    fout.close();
-    List<FileInfo> files = meta.list(Collections.singletonList(arg1Path.getParent()));
-    assertEquals(1, files.size());
-    deleteFs.delete(arg1Path, true);
-  }
 
   @Test
   public void testWritePerformace() throws Throwable {

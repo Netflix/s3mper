@@ -19,6 +19,7 @@
 package com.netflix.bdp.s3mper.metastore;
 
 import com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore;
+import com.netflix.bdp.s3mper.metastore.impl.InMemoryMetastore;
 
 /**
  * Provides basic file metadata for the metastore
@@ -28,7 +29,7 @@ import com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore;
 public class Metastore {
 
     public static FileSystemMetastore getFilesystemMetastore() {
-        return new DynamoDBMetastore();
+        return new InMemoryMetastore();
     }
 
 }

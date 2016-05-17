@@ -34,12 +34,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import com.netflix.bdp.s3mper.metastore.impl.InMemoryMetastore;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.log4j.Logger;
+import org.apache.log4j.net.SyslogAppender;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -78,8 +81,8 @@ public abstract class ConsistentListingAspect {
     private long recheckPeriod = Long.getLong("s3mper.listing.recheck.period", TimeUnit.MINUTES.toMillis(1));
     private long taskRecheckCount = Long.getLong("s3mper.listing.task.recheck.count", 0);
     private long taskRecheckPeriod = Long.getLong("s3mper.listing.task.recheck.period", TimeUnit.MINUTES.toMillis(1));
-    
-    @Pointcut 
+
+    @Pointcut
     public abstract void init();
     /**
      * Creates the metastore on initialization.
@@ -93,6 +96,7 @@ public abstract class ConsistentListingAspect {
      */
     @Before("init()") 
     public synchronized void initialize(JoinPoint jp) throws Exception {
+
         URI uri = (URI) jp.getArgs()[0];
         Configuration conf = (Configuration) jp.getArgs()[1];
         
@@ -111,7 +115,7 @@ public abstract class ConsistentListingAspect {
             Class<?> metaImpl = conf.getClass("s3mper.metastore.impl", com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore.class);
 
             try {
-                metastore = (FileSystemMetastore) ReflectionUtils.newInstance(metaImpl, conf);
+                metastore = new InMemoryMetastore();  //(FileSystemMetastore) ReflectionUtils.newInstance(metaImpl, conf);
                 metastore.initalize(uri, conf);
             } catch (Exception e) {
                 log.error("Error initializing s3mper metastore", e);
@@ -239,6 +243,9 @@ public abstract class ConsistentListingAspect {
      */
     @Around("list() && !cflow(delete()) && !within(ConsistentListingAspect)")
     public Object metastoreCheck(final ProceedingJoinPoint pjp) throws Throwable {
+
+        FileSystem fs = (FileSystem) pjp.getThis();
+
         if(disabled) {
             return pjp.proceed();
         }
@@ -290,56 +297,73 @@ public abstract class ConsistentListingAspect {
         try {
             List<FileInfo> metastoreListing = metastore.list(pathsToCheck);
             
-            List<Path> missingPaths = new ArrayList<Path>(0);
-            
-            int checkAttempt;
-            
-            for(checkAttempt=0; checkAttempt<=recheck; checkAttempt++) {
+            List<Path> missingPaths;
+            System.out.println("WEEEE");
+            if (true) {
                 missingPaths = checkListing(metastoreListing, s3Listing);
-                
-                if(delistDeleteMarkedFiles) {
-                    s3Listing = delistDeletedPaths(metastoreListing, s3Listing);
-                }
-                
-                if(missingPaths.isEmpty()) {
-                    break;
-                }
-                
-                //Check if acceptable threshold of data has been met.  This is a little
-                //ambigious becuase S3 could potentially have more files than the
-                //metastore (via out-of-band access) and throw off the ratio
-                if(fileThreshold < 1 && metastoreListing.size() > 0) {
-                    float ratio = s3Listing.length / (float) metastoreListing.size();
-                    
-                    if(ratio > fileThreshold) {
-                        log.info(format("Proceeding with incomplete listing at ratio %f (%f as acceptable). Still missing paths: %s", ratio, fileThreshold, missingPaths));
-                        
-                        missingPaths.clear();
-                        break;
+                System.out.println("WEEEE2 " + missingPaths);
+
+                if (!missingPaths.isEmpty()) {
+                    List<FileStatus> fullListing = new ArrayList<FileStatus>();
+                    fullListing.addAll(Arrays.asList(s3Listing));
+                    for (Path path : missingPaths) {
+                        System.out.println("WEEEE3 " + path);
+                        FileStatus status = fs.getFileStatus(path);
+                        fullListing.add(status);
                     }
-                }
-                
-                if(recheck == 0) {
-                    break;
-                }
-                
-                log.info(format("Rechecking consistency in %d (ms).  Files missing %d. Missing paths: %s", delay, missingPaths.size(), missingPaths));
-                Thread.sleep(delay);
-                s3Listing = (FileStatus[]) pjp.proceed();
-            }
-            
-            if (!missingPaths.isEmpty()) {
-                alertDispatcher.alert(missingPaths);
-                
-                if (shouldFail(conf)) {
-                    throw new S3ConsistencyException("Consistency check failed. See go/s3mper for details. Missing paths: " + missingPaths);
-                } else {
-                    log.error("Consistency check failed.  See go/s3mper for details. Missing paths: " + missingPaths);
+                    s3Listing = fullListing.toArray(new FileStatus[0]);
                 }
             } else {
-                if(checkAttempt > 0) {
-                    log.info(format("Listing achieved consistency after %d attempts", checkAttempt));
-                    alertDispatcher.recovered(pathsToCheck);
+
+                int checkAttempt;
+
+                for (checkAttempt = 0; checkAttempt <= recheck; checkAttempt++) {
+                    missingPaths = checkListing(metastoreListing, s3Listing);
+
+                    if (delistDeleteMarkedFiles) {
+                        s3Listing = delistDeletedPaths(metastoreListing, s3Listing);
+                    }
+
+                    if (missingPaths.isEmpty()) {
+                        break;
+                    }
+
+                    //Check if acceptable threshold of data has been met.  This is a little
+                    //ambigious becuase S3 could potentially have more files than the
+                    //metastore (via out-of-band access) and throw off the ratio
+                    if (fileThreshold < 1 && metastoreListing.size() > 0) {
+                        float ratio = s3Listing.length / (float) metastoreListing.size();
+
+                        if (ratio > fileThreshold) {
+                            log.info(format("Proceeding with incomplete listing at ratio %f (%f as acceptable). Still missing paths: %s", ratio, fileThreshold, missingPaths));
+
+                            missingPaths.clear();
+                            break;
+                        }
+                    }
+
+                    if (recheck == 0) {
+                        break;
+                    }
+
+                    log.info(format("Rechecking consistency in %d (ms).  Files missing %d. Missing paths: %s", delay, missingPaths.size(), missingPaths));
+                    Thread.sleep(delay);
+                    s3Listing = (FileStatus[]) pjp.proceed();
+                }
+
+                if (!missingPaths.isEmpty()) {
+                    alertDispatcher.alert(missingPaths);
+
+                    if (shouldFail(conf)) {
+                        throw new S3ConsistencyException("Consistency check failed. See go/s3mper for details. Missing paths: " + missingPaths);
+                    } else {
+                        log.error("Consistency check failed.  See go/s3mper for details. Missing paths: " + missingPaths);
+                    }
+                } else {
+                    if (checkAttempt > 0) {
+                        log.info(format("Listing achieved consistency after %d attempts", checkAttempt));
+                        alertDispatcher.recovered(pathsToCheck);
+                    }
                 }
             }
         } catch (TimeoutException t) {
@@ -384,7 +408,7 @@ public abstract class ConsistentListingAspect {
             if(f.isDeleted()) {
                 continue;
             }
-            
+            System.out.println("FOO " + f.getPath().toUri().normalize().getSchemeSpecificPart() + " " + s3paths);
             if (!s3paths.containsKey(f.getPath().toUri().normalize().getSchemeSpecificPart())) {
                 missingPaths.add(f.getPath());
             }

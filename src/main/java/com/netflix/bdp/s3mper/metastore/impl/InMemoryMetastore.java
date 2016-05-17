@@ -26,12 +26,10 @@ import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.Logger;
 
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * In memory implementation of the FileSystemMetastore interface,
@@ -40,6 +38,7 @@ import java.util.Map;
  * @author liljencrantz@spotify.com
  */
 public class InMemoryMetastore implements FileSystemMetastore {
+    private static final Logger log = Logger.getLogger(InMemoryMetastore.class.getName());
 
     private Map<Path, List<FileInfo>> data;
 
@@ -63,7 +62,7 @@ public class InMemoryMetastore implements FileSystemMetastore {
     public void add(Path path, boolean directory) throws Exception {
         synchronized (this) {
             delete(path);
-            get(path).add(new FileInfo(path, false, directory));
+            get(path.getParent()).add(new FileInfo(path, false, directory));
         }
     }
 
@@ -71,9 +70,10 @@ public class InMemoryMetastore implements FileSystemMetastore {
     public void delete(final Path path) throws Exception {
         synchronized (this) {
             List<FileInfo> list = get(path.getParent());
-            for (int i = 0; i < list.size(); i++) {
-                if (list.get(i).getPath().equals(path)) {
-                    list.remove(i);
+            for (Iterator<FileInfo> it = list.iterator(); it.hasNext();) {
+                FileInfo fi = it.next();
+                if (fi.getPath().equals(path)) {
+                    it.remove();
                 }
             }
         }
