@@ -35,6 +35,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.netflix.bdp.s3mper.metastore.Metastore;
 import com.netflix.bdp.s3mper.metastore.impl.InMemoryMetastore;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -115,11 +116,9 @@ public abstract class ConsistentListingAspect {
             Class<?> metaImpl = conf.getClass("s3mper.metastore.impl", com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore.class);
 
             try {
-                metastore = new InMemoryMetastore();  //(FileSystemMetastore) ReflectionUtils.newInstance(metaImpl, conf);
+                metastore = Metastore.getFilesystemMetastore(conf);
                 metastore.initalize(uri, conf);
             } catch (Exception e) {
-                log.error("Error initializing s3mper metastore", e);
-
                 disable();
 
                 if(failOnError) {

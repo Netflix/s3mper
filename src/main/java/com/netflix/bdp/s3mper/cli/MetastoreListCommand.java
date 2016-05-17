@@ -42,7 +42,7 @@ public class MetastoreListCommand extends Command {
             
             conf.set("s3mper.metastore.deleteMarker.enabled", "true");
             
-            FileSystemMetastore meta = Metastore.getFilesystemMetastore();
+            FileSystemMetastore meta = Metastore.getFilesystemMetastore(conf);
             meta.initalize(path.toUri(), conf);
             
             List<FileInfo> files = meta.list(Collections.singletonList(path));

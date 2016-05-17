@@ -18,8 +18,12 @@
 
 package com.netflix.bdp.s3mper.metastore;
 
+import com.netflix.bdp.s3mper.metastore.impl.BigTableMetastore;
 import com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore;
 import com.netflix.bdp.s3mper.metastore.impl.InMemoryMetastore;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.log4j.Logger;
 
 /**
  * Provides basic file metadata for the metastore
@@ -28,8 +32,30 @@ import com.netflix.bdp.s3mper.metastore.impl.InMemoryMetastore;
  */
 public class Metastore {
 
-    public static FileSystemMetastore getFilesystemMetastore() {
-        return new InMemoryMetastore();
+    private static final Logger log = Logger.getLogger(Metastore.class);
+
+    private static FileSystemMetastore metastore;
+
+    public static FileSystemMetastore getFilesystemMetastore(Configuration conf)
+            throws Exception {
+        if (metastore == null) {
+            synchronized (Metastore.class) {
+                if (metastore == null) {
+                    Class<?> metaImpl = conf.getClass("s3mper.metastore.impl",
+                                com.netflix.bdp.s3mper.metastore.impl.BigTableMetastore.class);
+//                            com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore.class);
+
+                    try {
+                        metastore = (FileSystemMetastore) ReflectionUtils.newInstance(metaImpl, conf);
+                    } catch (Exception e) {
+                        log.error("Error initializing s3mper metastore", e);
+                        throw e;
+                    }
+
+                }
+            }
+        }
+        return metastore;
     }
 
 }

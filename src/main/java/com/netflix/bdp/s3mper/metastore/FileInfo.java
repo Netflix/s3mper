@@ -68,4 +68,8 @@ public class FileInfo {
         this.directory = directory;
     }
 
+    public String toString() {
+        return "FileInfo(" + path + "," + deleted + "," + directory+")";
+    }
+
 }

@@ -66,6 +66,10 @@ dependencies {
     compile 'org.apache.commons:commons-math:2.2'
     compile 'commons-cli:commons-cli:1.2'
     compile 'args4j:args4j:2.0.25'
+    compile 'com.google.cloud.bigtable:bigtable-hbase-1.1:0.3.0'
+    compile 'org.apache.hbase:hbase-client:1.2.1'
+    compile group: 'io.netty', name: 'netty-tcnative', version: '1.1.33.Fork13', classifier: 'osx-x86_64'
+    compile 'com.fasterxml.jackson.core:jackson-databind:2.6.1'
     testCompile group: 'junit', name: 'junit', version: '4.10'
 }
 
