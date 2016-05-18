@@ -8,6 +8,7 @@ import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
 import com.netflix.bdp.s3mper.metastore.Metastore;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
@@ -75,10 +76,9 @@ public class BigTableMetastore implements FileSystemMetastore {
 
         // Now scan across all rows.
         for (Path parent: parents) {
-            String rowKey = parent.toString();
-            Scan scan = new Scan(Bytes.toBytes(rowKey));
+            ResultScanner scanner = new RetryTask<ResultScanner>(
+                    new ScanTask(parent), retryCount, timeout).call();
 
-            ResultScanner scanner = getTable().getScanner(scan);
             for (Result row : scanner) {
                 NavigableMap<byte[], byte[]> data = row.getFamilyMap(COLUMN_FAMILY_NAME);
                 for (Map.Entry<byte[], byte[]> entry : data.entrySet()) {
@@ -103,6 +103,7 @@ public class BigTableMetastore implements FileSystemMetastore {
 
     @Override
     public void delete(Path path) throws Exception {
+        new RetryTask(new DeleteTask(path), retryCount, timeout).call();
     }
 
     @Override
@@ -129,9 +130,18 @@ public class BigTableMetastore implements FileSystemMetastore {
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
         FileSystemMetastore fs = Metastore.getFilesystemMetastore(conf);
-        fs.initalize(null, null);
-        fs.add(new Path("//hadoopha/tmp/axeltest"), false);
-        System.out.println(
+
+        fs.initalize(null, conf);
+
+        fs.add(new Path("//hadoopha/tmp/axeltest1"), false);
+        fs.add(new Path("//hadoopha/tmp/axeltest2"), false);
+
+        System.out.println("List 1: " +
+                fs.list(ImmutableList.of(new Path("//hadoopha/tmp"))));
+
+        fs.delete(new Path("//hadoopha/tmp/axeltest2"));
+
+        System.out.println("List 2: " +
                 fs.list(ImmutableList.of(new Path("//hadoopha/tmp"))));
     }
 
@@ -140,8 +150,9 @@ public class BigTableMetastore implements FileSystemMetastore {
      * DynamoDB table.
      */
     private class AddTask implements Callable<Object> {
-        private Path path;
-        private boolean directory;
+
+        private final Path path;
+        private final boolean directory;
 
         public AddTask(Path path, boolean directory) {
             this.path = path;
@@ -152,17 +163,62 @@ public class BigTableMetastore implements FileSystemMetastore {
         public Object call() throws Exception {
             Path rowkey = path.getParent();
             Put put = new Put(Bytes.toBytes(rowkey.toUri().toString()));
-            URI relative = path.toUri().relativize(rowkey.toUri());
-
+            String basename = path.getName();
             String jsonBlob = directory ? "{\"isDirectory\": true}" : "{\"isDirectory\": false}";
 
             put.addColumn(
                     COLUMN_FAMILY_NAME,
-                    Bytes.toBytes(relative.toString()),
+                    Bytes.toBytes(basename.toString()),
                     Bytes.toBytes(jsonBlob));
 
             getTable().put(put);
             return null;
+        }
+
+    }
+
+    private class DeleteTask implements Callable<Object> {
+
+        private final Path path;
+
+        public DeleteTask(Path path) {
+            this.path = path;
+        }
+
+        @Override
+        public Object call() throws Exception {
+            Path rowkey = path.getParent();
+            URI relative = path.toUri().relativize(rowkey.toUri());
+
+            /* Get timestamp because BigTable is silly and doesn't support deleting all
+             * versions of a column */
+            Get timestampGet = new Get(Bytes.toBytes(rowkey.toUri().toString()));
+            timestampGet.addColumn(COLUMN_FAMILY_NAME, Bytes.toBytes(relative.toString()));
+
+            Delete delete = new Delete(Bytes.toBytes(rowkey.toUri().toString()));
+            for (Cell cell : getTable().get(timestampGet).listCells()) {
+                delete.addColumn(COLUMN_FAMILY_NAME,
+                        Bytes.toBytes(relative.toString()),
+                        cell.getTimestamp());
+            }
+
+            getTable().delete(delete);
+            return null;
+        }
+
+    }
+
+    private class ScanTask implements Callable<ResultScanner> {
+
+        private final Path parent;
+
+        public ScanTask(Path parent) {
+            this.parent = parent;
+        }
+
+        @Override
+        public ResultScanner call() throws Exception {
+            return getTable().getScanner(new Scan(Bytes.toBytes(parent.toString())));
         }
 
     }
