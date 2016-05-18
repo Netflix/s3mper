@@ -54,6 +54,18 @@ repositories {
     mavenCentral()
 }
 
+String classifier;
+switch(System.getProperty("os.name").toLowerCase().split()[0]) {
+    case 'linux':
+        classifier = "linux-x86_64"
+        break
+    case 'mac':
+        classifier = "osx-x86_64"
+        break
+    default:
+        throw new Exception('Unknown OS')
+}
+
 dependencies {
     compile 'org.apache.hadoop:hadoop-core:1.0.3'
     compile 'log4j:log4j:1.2.17'
@@ -68,7 +80,7 @@ dependencies {
     compile 'args4j:args4j:2.0.25'
     compile 'com.google.cloud.bigtable:bigtable-hbase-1.1:0.3.0'
     compile 'org.apache.hbase:hbase-client:1.2.1'
-    compile group: 'io.netty', name: 'netty-tcnative', version: '1.1.33.Fork13', classifier: 'osx-x86_64'
+    compile group: 'io.netty', name: 'netty-tcnative', version: '1.1.33.Fork13', classifier: classifier
     compile 'com.fasterxml.jackson.core:jackson-databind:2.6.1'
     testCompile group: 'junit', name: 'junit', version: '4.10'
 }
