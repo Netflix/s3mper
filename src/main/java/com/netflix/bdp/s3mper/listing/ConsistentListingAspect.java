@@ -82,6 +82,7 @@ public abstract class ConsistentListingAspect {
     private long recheckPeriod = Long.getLong("s3mper.listing.recheck.period", TimeUnit.MINUTES.toMillis(1));
     private long taskRecheckCount = Long.getLong("s3mper.listing.task.recheck.count", 0);
     private long taskRecheckPeriod = Long.getLong("s3mper.listing.task.recheck.period", TimeUnit.MINUTES.toMillis(1));
+    private boolean statOnMissingFile = Boolean.getBoolean("s3mper.listing.statOnMissingFile");
 
     @Pointcut
     public abstract void init();
@@ -172,6 +173,8 @@ public abstract class ConsistentListingAspect {
         recheckPeriod = conf.getLong("s3mper.listing.recheck.period", recheckPeriod);
         taskRecheckCount = conf.getLong("s3mper.listing.task.recheck.count", taskRecheckCount);
         taskRecheckPeriod = conf.getLong("s3mper.listing.task.recheck.period", taskRecheckPeriod);
+
+        statOnMissingFile = conf.getBoolean("s3mper.listing.statOnMissingFile", false);
     }
     
     @Pointcut
@@ -297,16 +300,13 @@ public abstract class ConsistentListingAspect {
             List<FileInfo> metastoreListing = metastore.list(pathsToCheck);
             
             List<Path> missingPaths;
-            System.out.println("WEEEE");
-            if (true) {
+            if (statOnMissingFile) {
                 missingPaths = checkListing(metastoreListing, s3Listing);
-                System.out.println("WEEEE2 " + missingPaths);
 
                 if (!missingPaths.isEmpty()) {
                     List<FileStatus> fullListing = new ArrayList<FileStatus>();
                     fullListing.addAll(Arrays.asList(s3Listing));
                     for (Path path : missingPaths) {
-                        System.out.println("WEEEE3 " + path);
                         FileStatus status = fs.getFileStatus(path);
                         fullListing.add(status);
                     }
@@ -407,7 +407,6 @@ public abstract class ConsistentListingAspect {
             if(f.isDeleted()) {
                 continue;
             }
-            System.out.println("FOO " + f.getPath().toUri().normalize().getSchemeSpecificPart() + " " + s3paths);
             if (!s3paths.containsKey(f.getPath().toUri().normalize().getSchemeSpecificPart())) {
                 missingPaths.add(f.getPath());
             }
