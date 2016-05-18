@@ -187,22 +187,14 @@ public class BigTableMetastore implements FileSystemMetastore {
 
         @Override
         public Object call() throws Exception {
-            Path rowkey = path.getParent();
-            URI relative = path.toUri().relativize(rowkey.toUri());
+            byte[] rowkey = Bytes.toBytes(path.getParent().toUri().toString());
+            byte[] basename = Bytes.toBytes(path.getName());
 
-            /* Get timestamp because BigTable is silly and doesn't support deleting all
-             * versions of a column */
-            Get timestampGet = new Get(Bytes.toBytes(rowkey.toUri().toString()));
-            timestampGet.addColumn(COLUMN_FAMILY_NAME, Bytes.toBytes(relative.toString()));
-
-            Delete delete = new Delete(Bytes.toBytes(rowkey.toUri().toString()));
-            for (Cell cell : getTable().get(timestampGet).listCells()) {
-                delete.addColumn(COLUMN_FAMILY_NAME,
-                        Bytes.toBytes(relative.toString()),
-                        cell.getTimestamp());
-            }
+            Delete delete = new Delete(rowkey);
+            delete.addColumns(COLUMN_FAMILY_NAME, basename);
 
             getTable().delete(delete);
+
             return null;
         }
 
