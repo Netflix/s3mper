@@ -2,6 +2,7 @@ package com.netflix.bdp.s3mper.metastore.impl;
 
 import com.google.cloud.bigtable.hbase.BigtableConfiguration;
 import com.google.common.collect.ImmutableList;
+import com.netflix.bdp.s3mper.common.RetryTask;
 import com.netflix.bdp.s3mper.metastore.FileInfo;
 import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
 import com.netflix.bdp.s3mper.metastore.Metastore;
@@ -19,6 +20,7 @@ import org.codehaus.jackson.map.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.util.*;
+import java.util.concurrent.Callable;
 
 /**
  * @author liljencrantz@spotify.com
@@ -30,21 +32,28 @@ public class BigTableMetastore implements FileSystemMetastore {
     private static final String projectId = "steel-ridge-91615";
     private static final String zone = "europe-west1-c";
     private static final String clusterId = "s3mper";
-    private static final String TABLE_NAME = "metadata";
-    private static final String COLUMN_FAMILY_NAME = "md";
+    private static final byte[] COLUMN_FAMILY_NAME = Bytes.toBytes("md");
 
     private Connection connection;
-    private ObjectMapper mapper = new ObjectMapper();
+    private static TableName tableName;
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    private int retryCount = Integer.getInteger("s3mper.metastore.retry", 3);
+    private int timeout = Integer.getInteger("s3mper.metastore.timeout", 5000);
 
     @Override
     public void initalize(URI uri, Configuration conf) throws Exception {
         try {
+            tableName = TableName.valueOf(conf.get("s3mper.metastore.name", "metadata"));
+            retryCount = conf.getInt("s3mper.metastore.retry", retryCount);
+            timeout = conf.getInt("s3mper.metastore.timeout", timeout);
+
             connection = BigtableConfiguration.connect(projectId, zone, clusterId);
 
             Admin admin = connection.getAdmin();
 
             // Create a table with a single column family
-            HTableDescriptor descriptor = new HTableDescriptor(TableName.valueOf(TABLE_NAME));
+            HTableDescriptor descriptor = new HTableDescriptor(tableName);
             descriptor.addFamily(new HColumnDescriptor(COLUMN_FAMILY_NAME));
             try {
                 admin.createTable(descriptor);
@@ -71,7 +80,7 @@ public class BigTableMetastore implements FileSystemMetastore {
 
             ResultScanner scanner = getTable().getScanner(scan);
             for (Result row : scanner) {
-                NavigableMap<byte[], byte[]> data = row.getFamilyMap(Bytes.toBytes(COLUMN_FAMILY_NAME));
+                NavigableMap<byte[], byte[]> data = row.getFamilyMap(COLUMN_FAMILY_NAME);
                 for (Map.Entry<byte[], byte[]> entry : data.entrySet()) {
                     String name = Bytes.toString(entry.getKey());
                     String jsonBlob = Bytes.toString(entry.getValue());
@@ -85,27 +94,15 @@ public class BigTableMetastore implements FileSystemMetastore {
 
     @Override
     public void add(Path path, boolean directory) throws Exception {
-        Path rowkey = path.getParent();
-        Put put = new Put(Bytes.toBytes(rowkey.toUri().toString()));
-        URI relative = path.toUri().relativize(rowkey.toUri());
-
-        String jsonBlob = directory ? "{\"isDirectory\": true}" : "{\"isDirectory\": false}" ;
-
-        put.addColumn(
-                Bytes.toBytes(COLUMN_FAMILY_NAME),
-                Bytes.toBytes(relative.toString()),
-                Bytes.toBytes(jsonBlob));
-
-        getTable().put(put);
+        new RetryTask(new AddTask(path, directory), retryCount, timeout).call();
     }
 
     private Table getTable() throws IOException {
-        return connection.getTable(TableName.valueOf(TABLE_NAME));
+        return connection.getTable(tableName);
     }
 
     @Override
     public void delete(Path path) throws Exception {
-
     }
 
     @Override
@@ -137,4 +134,37 @@ public class BigTableMetastore implements FileSystemMetastore {
         System.out.println(
                 fs.list(ImmutableList.of(new Path("//hadoopha/tmp"))));
     }
+
+    /**
+     * A Callable task for use with RetryTask to add a path to the
+     * DynamoDB table.
+     */
+    private class AddTask implements Callable<Object> {
+        private Path path;
+        private boolean directory;
+
+        public AddTask(Path path, boolean directory) {
+            this.path = path;
+            this.directory = directory;
+        }
+
+        @Override
+        public Object call() throws Exception {
+            Path rowkey = path.getParent();
+            Put put = new Put(Bytes.toBytes(rowkey.toUri().toString()));
+            URI relative = path.toUri().relativize(rowkey.toUri());
+
+            String jsonBlob = directory ? "{\"isDirectory\": true}" : "{\"isDirectory\": false}";
+
+            put.addColumn(
+                    COLUMN_FAMILY_NAME,
+                    Bytes.toBytes(relative.toString()),
+                    Bytes.toBytes(jsonBlob));
+
+            getTable().put(put);
+            return null;
+        }
+
+    }
+
 }
