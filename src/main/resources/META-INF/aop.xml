@@ -19,17 +19,23 @@
 <aspectj>
           
    <aspects>
-       <!-- Configuration for Consistent Listing -->
+        <!-- Configuration for Consistent Listing --> 
         
-       <aspect name="com.netflix.bdp.s3mper.listing.ConsistentListingAspect"/>
-       <concrete-aspect name="com.netflix.bdp.s3mper.listing__ConsistentListing"
-                        extends="com.netflix.bdp.s3mper.listing.ConsistentListingAspect">
-           <pointcut name="init" expression="execution(* org.apache.hadoop.fs.FileSystem.initialize(..))"/>
-           <pointcut name="create" expression="execution(* org.apache.hadoop.fs.FileSystem.create(..)) ||
-                                                execution(* org.apache.hadoop.fs.FileSystem.mkdirs(..))"/>
-           <pointcut name="list" expression="execution(* org.apache.hadoop.fs.FileSystem.listStatus(..))"/>
-           <pointcut name="delete" expression="execution(* org.apache.hadoop.fs.FileSystem.delete(..))"/>
-       </concrete-aspect>
+        <aspect name="com.netflix.bdp.s3mper.listing.ConsistentListingAspect"/>
+        
+        <concrete-aspect name="com.netflix.bdp.s3mper.listing__ConsistentListing"
+                         extends="com.netflix.bdp.s3mper.listing.ConsistentListingAspect">
+            <pointcut name="init" expression="execution(* org.apache.hadoop..*NativeS3FileSystem.initialize(..)) ||
+                                              execution(* com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystemBase.initialize(..))"/>
+            <pointcut name="create" expression="execution(* org.apache.hadoop..*NativeS3FileSystem.create(..)) ||
+                                                execution(* org.apache.hadoop..*NativeS3FileSystem.mkdirs(..)) ||
+                                                execution(* com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystemBase.create(..)) ||
+                                                execution(* com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystemBase.mkdirs(..))"/>
+            <pointcut name="list" expression="execution(* org.apache.hadoop..*NativeS3FileSystem.listStatus(..)) ||
+                                              execution(* com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystemBase.listStatus(..))"/>
+            <pointcut name="delete" expression="execution(* org.apache.hadoop..*NativeS3FileSystem.listStatus(..)) ||
+                                                execution(* com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystemBase.delete(..))"/>
+        </concrete-aspect>
 
    </aspects>
 
