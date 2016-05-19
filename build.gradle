@@ -118,6 +118,7 @@ task copyDeps(type: Copy) {
     into tasks.jar.destinationDir
 }
 tasks.assemble.dependsOn(copyDeps)
+tasks.test.dependsOn(copyDeps)
 
 task release(type: Tar, dependsOn: [ stage, copyScripts ] ) {
     from 'build/release/stage'
@@ -133,4 +134,16 @@ task release(type: Tar, dependsOn: [ stage, copyScripts ] ) {
     extension = 'tar.gz'
 
     compression = Compression.GZIP // or Compression.BZIP2
+}
+
+test {
+    testLogging {
+        showExceptions true
+        showStackTraces true
+        showStandardStreams true
+
+        exceptionFormat "full"
+    }
+
+    jvmArgs '-javaagent:build/libs/aspectjweaver-1.7.3.jar'
 }

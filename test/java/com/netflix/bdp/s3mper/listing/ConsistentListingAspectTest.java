@@ -21,37 +21,47 @@ package com.netflix.bdp.s3mper.listing;
 
 import com.netflix.bdp.s3mper.alert.impl.CloudWatchAlertDispatcher;
 import com.netflix.bdp.s3mper.metastore.FileInfo;
-import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
 import com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore;
 import com.netflix.bdp.s3mper.metastore.impl.MetastoreJanitor;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.util.Progressable;
 import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.Test;
-import static org.junit.Assert.*;
 import org.junit.BeforeClass;
-import static java.lang.String.*;
+import org.junit.Test;
+
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.util.Progressable;
+
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static java.lang.String.format;
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  *
  * @author dweeks
  */
 public class ConsistentListingAspectTest {
+
+    private static final String AWS_ACCESS_KEY_ID = "AWS_ACCESS_KEY_ID";
+
+    private static final String AWS_SECRET_ACCESS_KEY = "AWS_SECRET_ACCESS_KEY";
+
     private static final Logger log = Logger.getLogger(ConsistentListingAspectTest.class.getName());
     
     private static DynamoDBMetastore meta;
@@ -65,8 +75,18 @@ public class ConsistentListingAspectTest {
     
     @BeforeClass
     public static void setUpClass() throws Exception {
+        for (final String envVar : asList(AWS_ACCESS_KEY_ID,
+                                          AWS_SECRET_ACCESS_KEY)) {
+            if (isNullOrEmpty(System.getenv(envVar))) {
+                fail("Required environment variable " + envVar + " is not defined");
+            }
+        }
+
         conf = new Configuration();
-        
+
+        conf.set("s3mper.override.awsAccessKeyId", System.getenv(AWS_ACCESS_KEY_ID));
+        conf.set("s3mper.override.awsSecretAccessKey", System.getenv(AWS_SECRET_ACCESS_KEY));
+
         conf.setBoolean("s3mper.disable", false);
         conf.setBoolean("s3mper.failOnError", true);
         conf.setBoolean("s3mper.metastore.deleteMarker.enabled", true);
@@ -100,10 +120,25 @@ public class ConsistentListingAspectTest {
     @AfterClass
     public static void tearDownClass() throws Exception {
         janitor.clearPath(testPath);
-        
+
         markerFs.close();
         deleteFs.close();
         meta.close();
+        if (janitor != null) {
+            janitor.clearPath(testPath);
+        }
+
+        if (markerFs != null) {
+            markerFs.close();
+        }
+
+        if (deleteFs != null) {
+            deleteFs.close();
+        }
+
+        if (meta != null) {
+            meta.close();
+        }
     }
     
     @Before
