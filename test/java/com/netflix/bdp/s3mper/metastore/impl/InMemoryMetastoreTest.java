@@ -88,7 +88,7 @@ public class InMemoryMetastoreTest {
         conf.setLong("s3mper.listing.recheck.period", 1000);
         conf.setFloat("s3mper.listing.threshold", 1);
         conf.set("s3mper.metastore.name", "ConsistentListingMetastoreTest-" + runId);
-        conf.set("s3mper.metastore.impl", "com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore");
+        conf.set("s3mper.metastore.impl", "com.netflix.bdp.s3mper.metastore.impl.InMemoryMetastore");
         conf.setBoolean("s3mper.metastore.create", true);
 
         testPath = new Path(System.getProperty("fs.test.path", "s3n://spotify-s3mper-test/test-" +  runId));
