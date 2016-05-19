@@ -37,6 +37,7 @@ import org.junit.Test;
 import java.io.OutputStream;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Arrays.asList;
@@ -65,6 +66,8 @@ public class InMemoryMetastoreTest {
 
     @BeforeClass
     public static void setUpClass() throws Exception {
+        final String runId =  Integer.toHexString(new Random().nextInt());
+
         for (final String envVar : asList(AWS_ACCESS_KEY_ID,
                                           AWS_SECRET_ACCESS_KEY)) {
             if (isNullOrEmpty(System.getenv(envVar))) {
@@ -84,9 +87,11 @@ public class InMemoryMetastoreTest {
         conf.setLong("s3mper.listing.recheck.count", 10);
         conf.setLong("s3mper.listing.recheck.period", 1000);
         conf.setFloat("s3mper.listing.threshold", 1);
-        conf.set("s3mper.metastore.name", "ConsistentListingMetastoreTest");
+        conf.set("s3mper.metastore.name", "ConsistentListingMetastoreTest-" + runId);
+        conf.set("s3mper.metastore.impl", "com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore");
+        conf.setBoolean("s3mper.metastore.create", true);
 
-        testPath = new Path(System.getProperty("fs.test.path", "s3n://netflix-s3mper-test/test"));
+        testPath = new Path(System.getProperty("fs.test.path", "s3n://spotify-s3mper-test/test-" +  runId));
 
         markerFs = FileSystem.get(testPath.toUri(), conf);
 
