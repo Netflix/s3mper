@@ -23,14 +23,10 @@ import com.netflix.bdp.s3mper.alert.impl.CloudWatchAlertDispatcher;
 import com.netflix.bdp.s3mper.listing.ConsistentListingAspectTest;
 import com.netflix.bdp.s3mper.metastore.FileInfo;
 import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
-import com.netflix.bdp.s3mper.metastore.Metastore;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.util.Progressable;
 import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -41,16 +37,22 @@ import org.junit.Test;
 import java.io.OutputStream;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
-import static java.lang.String.format;
-import static org.junit.Assert.*;
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 /**
  * @author liljencrantz@spotify.com
  */
 public class InMemoryMetastoreTest {
+
+    private static final String AWS_ACCESS_KEY_ID = "AWS_ACCESS_KEY_ID";
+
+    private static final String AWS_SECRET_ACCESS_KEY = "AWS_SECRET_ACCESS_KEY";
+
     private static final Logger log = Logger.getLogger(ConsistentListingAspectTest.class.getName());
 
     private static FileSystemMetastore meta;
@@ -63,7 +65,17 @@ public class InMemoryMetastoreTest {
 
     @BeforeClass
     public static void setUpClass() throws Exception {
+        for (final String envVar : asList(AWS_ACCESS_KEY_ID,
+                                          AWS_SECRET_ACCESS_KEY)) {
+            if (isNullOrEmpty(System.getenv(envVar))) {
+                fail("Required environment variable " + envVar + " is not defined");
+            }
+        }
+
         conf = new Configuration();
+
+        conf.set("s3mper.override.awsAccessKeyId", System.getenv(AWS_ACCESS_KEY_ID));
+        conf.set("s3mper.override.awsSecretAccessKey", System.getenv(AWS_SECRET_ACCESS_KEY));
 
         conf.setBoolean("s3mper.disable", false);
         conf.setBoolean("s3mper.failOnError", true);

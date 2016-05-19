@@ -142,9 +142,7 @@ s3mper.metastore.name|ConsistentListingMetastore|The name of the DynamoDB table 
 Verification
 ------------
 
-A unit test is included with the library that exercises the advised commands on the file system.  Build the test jars with the command `./gradlew testJar` and include the `s3mpter-test.jar` in the classpath.  Use the `scripts/verify-consistent-listing.sh` command to run the unit tests.  
-
-__Note:__ you may need to modify some paths in the script to point to the correct directories.
+Run `gradle test`. You will need to set the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables.
 
 Administration
 --------------
