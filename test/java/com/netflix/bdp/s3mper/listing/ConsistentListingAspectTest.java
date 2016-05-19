@@ -95,6 +95,7 @@ public class ConsistentListingAspectTest {
         conf.setLong("s3mper.listing.recheck.period", 1000);
         conf.setFloat("s3mper.listing.threshold", 1);
         conf.set("s3mper.metastore.name", "ConsistentListingMetastoreTest");
+        conf.set("s3mper.metastore.impl", "com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore");
         
         testPath = new Path(System.getProperty("fs.test.path", "s3n://netflix-s3mper-test/test"));
         
@@ -119,11 +120,6 @@ public class ConsistentListingAspectTest {
     
     @AfterClass
     public static void tearDownClass() throws Exception {
-        janitor.clearPath(testPath);
-
-        markerFs.close();
-        deleteFs.close();
-        meta.close();
         if (janitor != null) {
             janitor.clearPath(testPath);
         }
