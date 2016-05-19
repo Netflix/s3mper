@@ -35,6 +35,8 @@
                                               execution(* com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystemBase.listStatus(..))"/>
             <pointcut name="delete" expression="execution(* org.apache.hadoop..*NativeS3FileSystem.listStatus(..)) ||
                                                 execution(* com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystemBase.delete(..))"/>
+            <pointcut name="rename" expression="execution(* org.apache.hadoop..*NativeS3FileSystem.rename(..)) ||
+                                                execution(* com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystemBase.rename(..))"/>
         </concrete-aspect>
 
    </aspects>
