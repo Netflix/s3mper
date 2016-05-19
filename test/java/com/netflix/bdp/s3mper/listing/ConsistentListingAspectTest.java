@@ -19,6 +19,7 @@
 
 package com.netflix.bdp.s3mper.listing;
 
+import com.amazonaws.services.dynamodb.model.ResourceNotFoundException;
 import com.netflix.bdp.s3mper.alert.impl.CloudWatchAlertDispatcher;
 import com.netflix.bdp.s3mper.metastore.FileInfo;
 import com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore;
@@ -42,7 +43,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -112,6 +113,20 @@ public class ConsistentListingAspectTest {
         
         meta = new DynamoDBMetastore();
         meta.initalize(testPath.toUri(), conf);
+
+        while (true) {
+            try {
+                meta.list(asList(testPath));
+                break;
+            } catch (Exception e) {
+                if ((e instanceof ResourceNotFoundException)
+                    || (e.getCause() instanceof ResourceNotFoundException)) {
+                    Thread.sleep(1000);
+                } else {
+                    throw e;
+                }
+            }
+        }
         
         alert = new CloudWatchAlertDispatcher();
         alert.init(testPath.toUri(), conf);
@@ -153,7 +168,6 @@ public class ConsistentListingAspectTest {
         conf.setLong("s3mper.listing.recheck.count", 10);
         conf.setLong("s3mper.listing.recheck.period", 1000);
         conf.setFloat("s3mper.listing.threshold", 1);
-        conf.set("s3mper.metastore.name", "ConsistentListingMetastoreTest");
                 
         janitor.clearPath(testPath);
         deleteFs.delete(testPath, true);

@@ -128,7 +128,6 @@ public class InMemoryMetastoreTest {
         conf.setLong("s3mper.listing.recheck.count", 10);
         conf.setLong("s3mper.listing.recheck.period", 1000);
         conf.setFloat("s3mper.listing.threshold", 1);
-        conf.set("s3mper.metastore.name", "ConsistentListingMetastoreTest");
 
         deleteFs.delete(testPath, true);
     }
