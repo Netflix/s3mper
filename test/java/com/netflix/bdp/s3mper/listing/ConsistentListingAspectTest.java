@@ -84,8 +84,8 @@ public class ConsistentListingAspectTest {
 
         conf = new Configuration();
 
-        conf.set("s3mper.override.awsAccessKeyId", System.getenv(AWS_ACCESS_KEY_ID));
-        conf.set("s3mper.override.awsSecretAccessKey", System.getenv(AWS_SECRET_ACCESS_KEY));
+        conf.set("fs.s3n.awsAccessKeyId", System.getenv(AWS_ACCESS_KEY_ID));
+        conf.set("fs.s3n.awsSecretAccessKey", System.getenv(AWS_SECRET_ACCESS_KEY));
 
         conf.setBoolean("s3mper.disable", false);
         conf.setBoolean("s3mper.failOnError", true);
