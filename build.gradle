@@ -114,7 +114,7 @@ task copyScripts(type: Copy) {
 
 task copyDeps(type: Copy) {
     from configurations.runtime 
-    includes = [ 'aspectjrt*', 'aspectjweaver*' ]     
+    includes = [ 'aspectjrt*', 'aspectjweaver*', '*hbase*' ]
     into tasks.jar.destinationDir
 }
 tasks.assemble.dependsOn(copyDeps)
