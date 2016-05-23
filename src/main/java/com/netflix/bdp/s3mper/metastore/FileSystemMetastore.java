@@ -34,11 +34,13 @@ public interface FileSystemMetastore {
     void initalize(URI uri, Configuration conf) throws Exception;
     
     List<FileInfo> list(List<Path> path) throws Exception;
-    
+
+    void add(List<FileInfo> path) throws Exception;
     void add(Path path, boolean directory) throws Exception;
     
     void delete(Path path) throws Exception;
-    
+    void delete(List<Path> path) throws Exception;
+
     void close();
 
     int getTimeout();

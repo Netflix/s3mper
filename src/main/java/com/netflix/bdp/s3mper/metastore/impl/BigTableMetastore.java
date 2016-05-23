@@ -8,7 +8,6 @@ import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
 import com.netflix.bdp.s3mper.metastore.Metastore;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
@@ -93,6 +92,11 @@ public class BigTableMetastore implements FileSystemMetastore {
     }
 
     @Override
+    public void add(List<FileInfo> path) throws Exception {
+        MetastoreFallback.add(this, path);
+    }
+
+    @Override
     public void add(Path path, boolean directory) throws Exception {
         new RetryTask(new AddTask(path, directory), retryCount, timeout).call();
     }
@@ -104,6 +108,11 @@ public class BigTableMetastore implements FileSystemMetastore {
     @Override
     public void delete(Path path) throws Exception {
         new RetryTask(new DeleteTask(path), retryCount, timeout).call();
+    }
+
+    @Override
+    public void delete(List<Path> path) throws Exception {
+        MetastoreFallback.delete(this, path);
     }
 
     @Override
