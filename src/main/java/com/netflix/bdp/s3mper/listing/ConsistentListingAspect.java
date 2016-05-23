@@ -19,6 +19,7 @@
 
 package com.netflix.bdp.s3mper.listing;
 
+import com.google.common.collect.ImmutableList;
 import com.netflix.bdp.s3mper.metastore.FileInfo;
 import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
 import com.netflix.bdp.s3mper.alert.AlertDispatcher;
@@ -36,14 +37,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.netflix.bdp.s3mper.metastore.Metastore;
-import com.netflix.bdp.s3mper.metastore.impl.InMemoryMetastore;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.log4j.Logger;
-import org.apache.log4j.net.SyslogAppender;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -299,7 +298,7 @@ public abstract class ConsistentListingAspect {
         try {
             List<FileInfo> metastoreListing = metastore.list(pathsToCheck);
             
-            List<Path> missingPaths;
+            List<Path> missingPaths = ImmutableList.of();
             if (statOnMissingFile) {
                 missingPaths = checkListing(metastoreListing, s3Listing);
 

@@ -179,7 +179,12 @@ public class DynamoDBMetastore implements FileSystemMetastore {
     public List<FileInfo> list(List<Path> paths) throws Exception {
         return list(paths, deleteMarkerEnabled);
     }
-    
+
+    @Override
+    public void add(List<FileInfo> path) throws Exception {
+        MetastoreFallback.add(this, path);
+    }
+
     /**
      * Returns a list of files that should exist in the FileSystem with 
      * optional inclusion of deleted entries.
@@ -257,7 +262,12 @@ public class DynamoDBMetastore implements FileSystemMetastore {
         
         task.call();
     }
-    
+
+    @Override
+    public void delete(List<Path> path) throws Exception {
+        MetastoreFallback.delete(this, path);
+    }
+
     @Override
     public void close() {
     }

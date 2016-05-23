@@ -59,6 +59,11 @@ public class InMemoryMetastore implements FileSystemMetastore {
     }
 
     @Override
+    public void add(List<FileInfo> path) throws Exception {
+        MetastoreFallback.add(this, path);
+    }
+
+    @Override
     public void add(Path path, boolean directory) throws Exception {
         synchronized (this) {
             delete(path);
@@ -77,6 +82,11 @@ public class InMemoryMetastore implements FileSystemMetastore {
                 }
             }
         }
+    }
+
+    @Override
+    public void delete(List<Path> path) throws Exception {
+        MetastoreFallback.delete(this, path);
     }
 
     @Override
