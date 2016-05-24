@@ -92,13 +92,31 @@ public class BigTableMetastore implements FileSystemMetastore {
     }
 
     @Override
-    public void add(List<FileInfo> path) throws Exception {
-        MetastoreFallback.add(this, path);
+    public void add(List<FileInfo> paths) throws Exception {
+        Map<Path, List<FileInfo>> data = new HashMap<Path, List<FileInfo>>();
+        for(FileInfo path: paths) {
+            Path parent = path.getPath().getParent();
+            if (!data.containsKey(parent)) {
+                data.put(parent, new ArrayList<FileInfo>());
+            }
+            data.get(parent).add(path);
+        }
+        for (Map.Entry<Path, List<FileInfo>> entry : data.entrySet()) {
+            new RetryTask(
+                    new AddTask(
+                            entry.getKey(),
+                            entry.getValue()),
+                    retryCount, timeout).call();
+        }
     }
 
     @Override
     public void add(Path path, boolean directory) throws Exception {
-        new RetryTask(new AddTask(path, directory), retryCount, timeout).call();
+        new RetryTask(
+                new AddTask(
+                        path.getParent(),
+                        ImmutableList.of(new FileInfo(path, false, directory))),
+                retryCount, timeout).call();
     }
 
     private Table getTable() throws IOException {
@@ -160,25 +178,26 @@ public class BigTableMetastore implements FileSystemMetastore {
      */
     private class AddTask implements Callable<Object> {
 
-        private final Path path;
-        private final boolean directory;
+        private final Path parent;
+        private final List<FileInfo> names;
 
-        public AddTask(Path path, boolean directory) {
-            this.path = path;
-            this.directory = directory;
+        public AddTask(Path parent, List<FileInfo> names) {
+            this.parent = parent;
+            this.names = names;
         }
 
         @Override
         public Object call() throws Exception {
-            Path rowkey = path.getParent();
-            Put put = new Put(Bytes.toBytes(rowkey.toUri().toString()));
-            String basename = path.getName();
-            String jsonBlob = directory ? "{\"isDirectory\": true}" : "{\"isDirectory\": false}";
+            Put put = new Put(Bytes.toBytes(parent.toUri().toString()));
 
-            put.addColumn(
-                    COLUMN_FAMILY_NAME,
-                    Bytes.toBytes(basename.toString()),
-                    Bytes.toBytes(jsonBlob));
+            for (FileInfo name: names) {
+                String jsonBlob = name.isDirectory() ? "{\"isDirectory\": true}" : "{\"isDirectory\": false}";
+
+                put.addColumn(
+                        COLUMN_FAMILY_NAME,
+                        Bytes.toBytes(name.getPath().getName()),
+                        Bytes.toBytes(jsonBlob));
+            }
 
             getTable().put(put);
             return null;

@@ -63,7 +63,7 @@ public class InMemoryMetastoreTest {
     private static FileSystem markerFs;
     private static FileSystem deleteFs;
     private static Path testPath;
-
+/*
     @BeforeClass
     public static void setUpClass() throws Exception {
         final String runId =  Integer.toHexString(new Random().nextInt());
