@@ -19,6 +19,7 @@
 
 package com.netflix.bdp.s3mper.listing;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.netflix.bdp.s3mper.metastore.FileInfo;
 import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
@@ -440,6 +441,24 @@ public abstract class ConsistentListingAspect {
         return s3files.toArray(new FileStatus[s3files.size()]);
     }
 
+    private static class RenameInfo {
+        final Path srcPath;
+        final Path dstPath;
+        final boolean srcExists;
+        final boolean dstExists;
+        final boolean srcIsFile;
+        final boolean dstIsFile;
+
+        public RenameInfo(FileSystem fs, Path srcPath, Path dstPath) throws IOException {
+            this.srcPath = srcPath;
+            this.dstPath = dstPath;
+            srcIsFile = fs.isFile(srcPath);
+            dstIsFile = fs.isFile(dstPath);
+            srcExists = fs.exists(srcPath);
+            dstExists = fs.exists(dstPath);
+        }
+    }
+
     @Pointcut
     public abstract void rename();
 
@@ -463,38 +482,67 @@ public abstract class ConsistentListingAspect {
         Path srcPath = (Path) pjp.getArgs()[0];
         Path dstPath = (Path) pjp.getArgs()[1];
 
-        metadataRename(conf, fs, srcPath, dstPath);
+        Preconditions.checkNotNull(srcPath);
+        Preconditions.checkNotNull(dstPath);
+
+        RenameInfo renameInfo = new RenameInfo(fs, srcPath, dstPath);
+        metadataRename(conf, fs, renameInfo);
 
         Object obj = pjp.proceed();
         if ((Boolean) obj) {
             // Everything went fine delete the old metadata.
             // If not then we'll keep the metadata to prevent incomplete listings.
             // Manual cleanup will be required in the case of failure.
-            metadataCleanup(conf, fs, srcPath);
+            metadataCleanup(conf, fs, renameInfo);
         }
         return obj;
     }
 
-    private void metadataRename(Configuration conf, FileSystem fs, Path srcPath, Path dstPath) throws Exception {
+    private void metadataRename(Configuration conf, FileSystem fs, RenameInfo info) throws Exception {
         try {
-            if (fs.exists(srcPath) && !fs.exists(dstPath) && fs.isFile(srcPath)) {
-                renameFile(srcPath, dstPath);
-            } else if (fs.exists(srcPath) && !fs.exists(dstPath) && !fs.isFile(srcPath)){
-                renameFolder(srcPath, dstPath);
+            final String error = "Unsupported move " + info.srcPath.toUri().getPath()
+                + " to " + info.dstPath.toUri().getPath() + ": ";
+
+            if (info.srcPath.isRoot()) {
+                throw new IOException(error + "Cannot rename root");
+            }
+
+            if (!info.srcExists) {
+                throw new IOException(error + "Source does not exist");
+            }
+
+            if (!info.dstExists && !fs.exists(info.dstPath.getParent())) {
+                throw new IOException(error + "Target parent does not exist");
+            }
+
+            if (info.dstExists && info.dstIsFile) {
+                throw new IOException(error + "Target file exists");
+            }
+
+            if (info.dstExists) {
+                Path actualDst = new Path(info.dstPath, info.srcPath.getName());
+                if (info.srcIsFile) {
+                    renameFile(info.srcPath, actualDst);
+                } else {
+                    renameFolder(info.srcPath, actualDst);
+                }
             } else {
-                throw new UnsupportedOperationException("Move" + srcPath.toUri().getPath()
-                    + " to " + dstPath.toUri().getPath());
+                if (info.srcIsFile) {
+                    renameFile(info.srcPath, info.dstPath);
+                } else {
+                    renameFolder(info.srcPath, info.dstPath);
+                }
             }
         } catch (TimeoutException t) {
-            log.error("Timeout occurred rename metastore path: " + srcPath, t);
+            log.error("Timeout occurred rename metastore path: " + info.srcPath, t);
 
-            alertDispatcher.timeout("metastoreRename", Collections.singletonList(srcPath));
+            alertDispatcher.timeout("metastoreRename", Collections.singletonList(info.srcPath));
 
             if(failOnTimeout) {
                 throw t;
             }
         } catch (Exception e) {
-            log.error("Error rename paths from metastore: " + srcPath, e);
+            log.error("Error rename paths from metastore: " + info.srcPath, e);
 
             if(shouldFail(conf)) {
                 throw e;
@@ -519,19 +567,19 @@ public abstract class ConsistentListingAspect {
         }
     }
 
-    private void metadataCleanup(Configuration conf, FileSystem fs, Path srcPath) throws Exception {
+    private void metadataCleanup(Configuration conf, FileSystem fs, RenameInfo info) throws Exception {
         try {
-            renameCleanup(fs, srcPath);
+            renameCleanup(fs, new FileInfo(info.srcPath, false, !info.srcIsFile));
         } catch (TimeoutException t) {
-            log.error("Timeout occurred rename cleanup metastore path: " + srcPath, t);
+            log.error("Timeout occurred rename cleanup metastore path: " + info.srcPath, t);
 
-            alertDispatcher.timeout("metastoreRenameCleanup", Collections.singletonList(srcPath));
+            alertDispatcher.timeout("metastoreRenameCleanup", Collections.singletonList(info.srcPath));
 
             if(failOnTimeout) {
                 throw t;
             }
         } catch (Exception e) {
-            log.error("Error executing rename cleanup for paths from metastore: " + srcPath, e);
+            log.error("Error executing rename cleanup for paths from metastore: " + info.srcPath, e);
 
             if(shouldFail(conf)) {
                 throw e;
@@ -539,17 +587,17 @@ public abstract class ConsistentListingAspect {
         }
     }
 
-    private void renameCleanup(FileSystem fs, Path path) throws Exception {
-        if (fs.isFile(path)) {
-            metastore.delete(path);
+    private void renameCleanup(FileSystem fs, FileInfo info) throws Exception {
+        if (!info.isDirectory()) {
+            metastore.delete(info.getPath());
             return;
         }
 
-        List<FileInfo> metastoreFiles = metastore.list(Collections.singletonList(path));
-        for (FileInfo info : metastoreFiles) {
-            renameCleanup(fs, info.getPath());
+        List<FileInfo> metastoreFiles = metastore.list(Collections.singletonList(info.getPath()));
+        for (FileInfo fileInfo : metastoreFiles) {
+            renameCleanup(fs, fileInfo);
         }
-        metastore.delete(path);
+        metastore.delete(info.getPath());
     }
     
     @Pointcut
@@ -581,7 +629,7 @@ public abstract class ConsistentListingAspect {
             
         try {
             FileSystem s3fs = (FileSystem) pjp.getTarget();
-            
+
             Set<Path> filesToDelete = new HashSet<Path>();
             filesToDelete.add(deletePath);
             

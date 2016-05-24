@@ -21,6 +21,8 @@ package com.netflix.bdp.s3mper.metastore;
 import com.netflix.bdp.s3mper.metastore.impl.BigTableMetastore;
 import com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore;
 import com.netflix.bdp.s3mper.metastore.impl.InMemoryMetastore;
+import com.netflix.bdp.s3mper.metastore.impl.LoggingMetastore;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.log4j.Logger;
@@ -47,6 +49,9 @@ public class Metastore {
 
                     try {
                         metastore = (FileSystemMetastore) ReflectionUtils.newInstance(metaImpl, conf);
+                        if (log.isDebugEnabled()) {
+                            metastore = new LoggingMetastore(metastore);
+                        }
                     } catch (Exception e) {
                         log.error("Error initializing s3mper metastore", e);
                         throw e;

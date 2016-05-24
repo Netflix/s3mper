@@ -79,11 +79,13 @@ public class BigTableMetastore implements FileSystemMetastore {
                     new GetTask(parent), retryCount, timeout).call();
 
             NavigableMap<byte[], byte[]> data = row.getFamilyMap(COLUMN_FAMILY_NAME);
-            for (Map.Entry<byte[], byte[]> entry : data.entrySet()) {
-                String name = Bytes.toString(entry.getKey());
-                String jsonBlob = Bytes.toString(entry.getValue());
-                Map mmm = mapper.readValue(jsonBlob, HashMap.class);
-                result.add(new FileInfo(new Path(parent, name), false, (Boolean) mmm.get("isDirectory")));
+            if (data != null) {
+                for (Map.Entry<byte[], byte[]> entry : data.entrySet()) {
+                    String name = Bytes.toString(entry.getKey());
+                    String jsonBlob = Bytes.toString(entry.getValue());
+                    Map mmm = mapper.readValue(jsonBlob, HashMap.class);
+                    result.add(new FileInfo(new Path(parent, name), false, (Boolean) mmm.get("isDirectory")));
+                }
             }
         }
         return result.build();

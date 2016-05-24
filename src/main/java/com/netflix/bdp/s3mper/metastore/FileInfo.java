@@ -35,6 +35,7 @@ public class FileInfo {
     public FileInfo(Path path) {
         this.path = path;
         this.deleted = false;
+
         this.directory = false;
     }
 
@@ -72,4 +73,24 @@ public class FileInfo {
         return "FileInfo(" + path + "," + deleted + "," + directory+")";
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        FileInfo fileInfo = (FileInfo) o;
+
+        if (deleted != fileInfo.deleted) return false;
+        if (directory != fileInfo.directory) return false;
+        return path != null ? path.equals(fileInfo.path) : fileInfo.path == null;
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = path != null ? path.hashCode() : 0;
+        result = 31 * result + (deleted ? 1 : 0);
+        result = 31 * result + (directory ? 1 : 0);
+        return result;
+    }
 }
