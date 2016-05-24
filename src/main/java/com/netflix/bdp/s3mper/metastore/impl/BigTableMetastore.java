@@ -73,19 +73,17 @@ public class BigTableMetastore implements FileSystemMetastore {
     public List<FileInfo> list(List<Path> parents) throws Exception {
         ImmutableList.Builder<FileInfo> result = ImmutableList.builder();
 
-        // Now scan across all rows.
+        // Now scan across all columns in row.
         for (Path parent: parents) {
-            ResultScanner scanner = new RetryTask<ResultScanner>(
-                    new ScanTask(parent), retryCount, timeout).call();
+            Result row = new RetryTask<Result>(
+                    new GetTask(parent), retryCount, timeout).call();
 
-            for (Result row : scanner) {
-                NavigableMap<byte[], byte[]> data = row.getFamilyMap(COLUMN_FAMILY_NAME);
-                for (Map.Entry<byte[], byte[]> entry : data.entrySet()) {
-                    String name = Bytes.toString(entry.getKey());
-                    String jsonBlob = Bytes.toString(entry.getValue());
-                    Map mmm = mapper.readValue(jsonBlob, HashMap.class);
-                    result.add(new FileInfo(new Path(parent, name), false, (Boolean) mmm.get("isDirectory")));
-                }
+            NavigableMap<byte[], byte[]> data = row.getFamilyMap(COLUMN_FAMILY_NAME);
+            for (Map.Entry<byte[], byte[]> entry : data.entrySet()) {
+                String name = Bytes.toString(entry.getKey());
+                String jsonBlob = Bytes.toString(entry.getValue());
+                Map mmm = mapper.readValue(jsonBlob, HashMap.class);
+                result.add(new FileInfo(new Path(parent, name), false, (Boolean) mmm.get("isDirectory")));
             }
         }
         return result.build();
@@ -228,17 +226,17 @@ public class BigTableMetastore implements FileSystemMetastore {
 
     }
 
-    private class ScanTask implements Callable<ResultScanner> {
+    private class GetTask implements Callable<Result> {
 
         private final Path parent;
 
-        public ScanTask(Path parent) {
+        public GetTask(Path parent) {
             this.parent = parent;
         }
 
         @Override
-        public ResultScanner call() throws Exception {
-            return getTable().getScanner(new Scan(Bytes.toBytes(parent.toString())));
+        public Result call() throws Exception {
+            return getTable().get(new Get(Bytes.toBytes(parent.toString())));
         }
 
     }
