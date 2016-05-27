@@ -19,6 +19,8 @@
 
 package com.netflix.bdp.s3mper.metastore.impl;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import com.netflix.bdp.s3mper.common.RetryTask;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.dynamodb.AmazonDynamoDBClient;
@@ -87,7 +89,7 @@ public class DynamoDBMetastore implements FileSystemMetastore {
     static final String LINK_HASH_KEY = "linkPath";
     static final String LINK_RANGE_KEY = "linkFile";
     static final String TIMESERIES_KEY = "epoch";
-    
+
     /**
      * Creates the metastore table in DynamoDB if it doesn't exist with the configured
      * read and write units.
@@ -177,7 +179,12 @@ public class DynamoDBMetastore implements FileSystemMetastore {
     public List<FileInfo> list(List<Path> paths) throws Exception {
         return list(paths, deleteMarkerEnabled);
     }
-    
+
+    @Override
+    public void add(List<FileInfo> path) throws Exception {
+        MetastoreFallback.add(this, path);
+    }
+
     /**
      * Returns a list of files that should exist in the FileSystem with 
      * optional inclusion of deleted entries.
@@ -255,7 +262,12 @@ public class DynamoDBMetastore implements FileSystemMetastore {
         
         task.call();
     }
-    
+
+    @Override
+    public void delete(List<Path> path) throws Exception {
+        MetastoreFallback.delete(this, path);
+    }
+
     @Override
     public void close() {
     }

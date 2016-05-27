@@ -19,6 +19,8 @@
 
 package com.netflix.bdp.s3mper.listing;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.netflix.bdp.s3mper.metastore.FileInfo;
 import com.netflix.bdp.s3mper.metastore.FileSystemMetastore;
 import com.netflix.bdp.s3mper.alert.AlertDispatcher;
@@ -34,6 +36,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import com.netflix.bdp.s3mper.metastore.Metastore;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -78,8 +82,9 @@ public abstract class ConsistentListingAspect {
     private long recheckPeriod = Long.getLong("s3mper.listing.recheck.period", TimeUnit.MINUTES.toMillis(1));
     private long taskRecheckCount = Long.getLong("s3mper.listing.task.recheck.count", 0);
     private long taskRecheckPeriod = Long.getLong("s3mper.listing.task.recheck.period", TimeUnit.MINUTES.toMillis(1));
-    
-    @Pointcut 
+    private boolean statOnMissingFile = Boolean.getBoolean("s3mper.listing.statOnMissingFile");
+
+    @Pointcut
     public abstract void init();
     /**
      * Creates the metastore on initialization.
@@ -93,6 +98,7 @@ public abstract class ConsistentListingAspect {
      */
     @Before("init()") 
     public synchronized void initialize(JoinPoint jp) throws Exception {
+
         URI uri = (URI) jp.getArgs()[0];
         Configuration conf = (Configuration) jp.getArgs()[1];
         
@@ -111,11 +117,9 @@ public abstract class ConsistentListingAspect {
             Class<?> metaImpl = conf.getClass("s3mper.metastore.impl", com.netflix.bdp.s3mper.metastore.impl.DynamoDBMetastore.class);
 
             try {
-                metastore = (FileSystemMetastore) ReflectionUtils.newInstance(metaImpl, conf);
+                metastore = Metastore.getFilesystemMetastore(conf);
                 metastore.initalize(uri, conf);
             } catch (Exception e) {
-                log.error("Error initializing s3mper metastore", e);
-
                 disable();
 
                 if(failOnError) {
@@ -169,6 +173,8 @@ public abstract class ConsistentListingAspect {
         recheckPeriod = conf.getLong("s3mper.listing.recheck.period", recheckPeriod);
         taskRecheckCount = conf.getLong("s3mper.listing.task.recheck.count", taskRecheckCount);
         taskRecheckPeriod = conf.getLong("s3mper.listing.task.recheck.period", taskRecheckPeriod);
+
+        statOnMissingFile = conf.getBoolean("s3mper.listing.statOnMissingFile", false);
     }
     
     @Pointcut
@@ -239,6 +245,9 @@ public abstract class ConsistentListingAspect {
      */
     @Around("list() && !cflow(delete()) && !within(ConsistentListingAspect)")
     public Object metastoreCheck(final ProceedingJoinPoint pjp) throws Throwable {
+
+        FileSystem fs = (FileSystem) pjp.getThis();
+
         if(disabled) {
             return pjp.proceed();
         }
@@ -290,56 +299,70 @@ public abstract class ConsistentListingAspect {
         try {
             List<FileInfo> metastoreListing = metastore.list(pathsToCheck);
             
-            List<Path> missingPaths = new ArrayList<Path>(0);
-            
-            int checkAttempt;
-            
-            for(checkAttempt=0; checkAttempt<=recheck; checkAttempt++) {
+            List<Path> missingPaths = ImmutableList.of();
+            if (statOnMissingFile) {
                 missingPaths = checkListing(metastoreListing, s3Listing);
-                
-                if(delistDeleteMarkedFiles) {
-                    s3Listing = delistDeletedPaths(metastoreListing, s3Listing);
-                }
-                
-                if(missingPaths.isEmpty()) {
-                    break;
-                }
-                
-                //Check if acceptable threshold of data has been met.  This is a little
-                //ambigious becuase S3 could potentially have more files than the
-                //metastore (via out-of-band access) and throw off the ratio
-                if(fileThreshold < 1 && metastoreListing.size() > 0) {
-                    float ratio = s3Listing.length / (float) metastoreListing.size();
-                    
-                    if(ratio > fileThreshold) {
-                        log.info(format("Proceeding with incomplete listing at ratio %f (%f as acceptable). Still missing paths: %s", ratio, fileThreshold, missingPaths));
-                        
-                        missingPaths.clear();
-                        break;
+
+                if (!missingPaths.isEmpty()) {
+                    List<FileStatus> fullListing = new ArrayList<FileStatus>();
+                    fullListing.addAll(Arrays.asList(s3Listing));
+                    for (Path path : missingPaths) {
+                        FileStatus status = fs.getFileStatus(path);
+                        fullListing.add(status);
                     }
-                }
-                
-                if(recheck == 0) {
-                    break;
-                }
-                
-                log.info(format("Rechecking consistency in %d (ms).  Files missing %d. Missing paths: %s", delay, missingPaths.size(), missingPaths));
-                Thread.sleep(delay);
-                s3Listing = (FileStatus[]) pjp.proceed();
-            }
-            
-            if (!missingPaths.isEmpty()) {
-                alertDispatcher.alert(missingPaths);
-                
-                if (shouldFail(conf)) {
-                    throw new S3ConsistencyException("Consistency check failed. See go/s3mper for details. Missing paths: " + missingPaths);
-                } else {
-                    log.error("Consistency check failed.  See go/s3mper for details. Missing paths: " + missingPaths);
+                    s3Listing = fullListing.toArray(new FileStatus[0]);
                 }
             } else {
-                if(checkAttempt > 0) {
-                    log.info(format("Listing achieved consistency after %d attempts", checkAttempt));
-                    alertDispatcher.recovered(pathsToCheck);
+
+                int checkAttempt;
+
+                for (checkAttempt = 0; checkAttempt <= recheck; checkAttempt++) {
+                    missingPaths = checkListing(metastoreListing, s3Listing);
+
+                    if (delistDeleteMarkedFiles) {
+                        s3Listing = delistDeletedPaths(metastoreListing, s3Listing);
+                    }
+
+                    if (missingPaths.isEmpty()) {
+                        break;
+                    }
+
+                    //Check if acceptable threshold of data has been met.  This is a little
+                    //ambigious becuase S3 could potentially have more files than the
+                    //metastore (via out-of-band access) and throw off the ratio
+                    if (fileThreshold < 1 && metastoreListing.size() > 0) {
+                        float ratio = s3Listing.length / (float) metastoreListing.size();
+
+                        if (ratio > fileThreshold) {
+                            log.info(format("Proceeding with incomplete listing at ratio %f (%f as acceptable). Still missing paths: %s", ratio, fileThreshold, missingPaths));
+
+                            missingPaths.clear();
+                            break;
+                        }
+                    }
+
+                    if (recheck == 0) {
+                        break;
+                    }
+
+                    log.info(format("Rechecking consistency in %d (ms).  Files missing %d. Missing paths: %s", delay, missingPaths.size(), missingPaths));
+                    Thread.sleep(delay);
+                    s3Listing = (FileStatus[]) pjp.proceed();
+                }
+
+                if (!missingPaths.isEmpty()) {
+                    alertDispatcher.alert(missingPaths);
+
+                    if (shouldFail(conf)) {
+                        throw new S3ConsistencyException("Consistency check failed. See go/s3mper for details. Missing paths: " + missingPaths);
+                    } else {
+                        log.error("Consistency check failed.  See go/s3mper for details. Missing paths: " + missingPaths);
+                    }
+                } else {
+                    if (checkAttempt > 0) {
+                        log.info(format("Listing achieved consistency after %d attempts", checkAttempt));
+                        alertDispatcher.recovered(pathsToCheck);
+                    }
                 }
             }
         } catch (TimeoutException t) {
@@ -384,7 +407,6 @@ public abstract class ConsistentListingAspect {
             if(f.isDeleted()) {
                 continue;
             }
-            
             if (!s3paths.containsKey(f.getPath().toUri().normalize().getSchemeSpecificPart())) {
                 missingPaths.add(f.getPath());
             }
@@ -418,7 +440,165 @@ public abstract class ConsistentListingAspect {
             
         return s3files.toArray(new FileStatus[s3files.size()]);
     }
-    
+
+    private static class RenameInfo {
+        final Path srcPath;
+        final Path dstPath;
+        final boolean srcExists;
+        final boolean dstExists;
+        final boolean srcIsFile;
+        final boolean dstIsFile;
+
+        public RenameInfo(FileSystem fs, Path srcPath, Path dstPath) throws IOException {
+            this.srcPath = srcPath;
+            this.dstPath = dstPath;
+            srcIsFile = fs.isFile(srcPath);
+            dstIsFile = fs.isFile(dstPath);
+            srcExists = fs.exists(srcPath);
+            dstExists = fs.exists(dstPath);
+        }
+    }
+
+    @Pointcut
+    public abstract void rename();
+
+    /**
+     * Rename listing records based on a rename call from the FileSystem.
+     *
+     * @param pjp
+     * @return
+     * @throws Throwable
+     */
+    @Around("rename() && !within(ConsistentListingAspect)")
+    public Object metastoreRename(final ProceedingJoinPoint pjp) throws Throwable {
+        if(disabled) {
+            return pjp.proceed();
+        }
+
+        Configuration conf = ((FileSystem) pjp.getTarget()).getConf();
+        updateConfig(conf);
+        FileSystem fs = (FileSystem) pjp.getTarget();
+
+        Path srcPath = (Path) pjp.getArgs()[0];
+        Path dstPath = (Path) pjp.getArgs()[1];
+
+        Preconditions.checkNotNull(srcPath);
+        Preconditions.checkNotNull(dstPath);
+
+        RenameInfo renameInfo = new RenameInfo(fs, srcPath, dstPath);
+        metadataRename(conf, fs, renameInfo);
+
+        Object obj = pjp.proceed();
+        if ((Boolean) obj) {
+            // Everything went fine delete the old metadata.
+            // If not then we'll keep the metadata to prevent incomplete listings.
+            // Manual cleanup will be required in the case of failure.
+            metadataCleanup(conf, fs, renameInfo);
+        }
+        return obj;
+    }
+
+    private void metadataRename(Configuration conf, FileSystem fs, RenameInfo info) throws Exception {
+        try {
+            final String error = "Unsupported move " + info.srcPath.toUri().getPath()
+                + " to " + info.dstPath.toUri().getPath() + ": ";
+
+            if (info.srcPath.isRoot()) {
+                throw new IOException(error + "Cannot rename root");
+            }
+
+            if (!info.srcExists) {
+                throw new IOException(error + "Source does not exist");
+            }
+
+            if (!info.dstExists && !fs.exists(info.dstPath.getParent())) {
+                throw new IOException(error + "Target parent does not exist");
+            }
+
+            if (info.dstExists && info.dstIsFile) {
+                throw new IOException(error + "Target file exists");
+            }
+
+            if (info.dstExists) {
+                Path actualDst = new Path(info.dstPath, info.srcPath.getName());
+                if (info.srcIsFile) {
+                    renameFile(info.srcPath, actualDst);
+                } else {
+                    renameFolder(info.srcPath, actualDst);
+                }
+            } else {
+                if (info.srcIsFile) {
+                    renameFile(info.srcPath, info.dstPath);
+                } else {
+                    renameFolder(info.srcPath, info.dstPath);
+                }
+            }
+        } catch (TimeoutException t) {
+            log.error("Timeout occurred rename metastore path: " + info.srcPath, t);
+
+            alertDispatcher.timeout("metastoreRename", Collections.singletonList(info.srcPath));
+
+            if(failOnTimeout) {
+                throw t;
+            }
+        } catch (Exception e) {
+            log.error("Error rename paths from metastore: " + info.srcPath, e);
+
+            if(shouldFail(conf)) {
+                throw e;
+            }
+        }
+    }
+
+    private void renameFile(Path src, Path dst) throws Exception {
+        metastore.add(dst, false);
+    }
+
+    private void renameFolder(Path src, Path dst) throws Exception {
+        metastore.add(dst, true);
+        List<FileInfo> metastoreFiles = metastore.list(Collections.singletonList(src));
+        for (FileInfo info : metastoreFiles) {
+            Path target = new Path(dst, info.getPath().getName());
+            if (info.isDirectory()) {
+                renameFolder(info.getPath(), target);
+            } else {
+                renameFile(info.getPath(), target);
+            }
+        }
+    }
+
+    private void metadataCleanup(Configuration conf, FileSystem fs, RenameInfo info) throws Exception {
+        try {
+            renameCleanup(fs, new FileInfo(info.srcPath, false, !info.srcIsFile));
+        } catch (TimeoutException t) {
+            log.error("Timeout occurred rename cleanup metastore path: " + info.srcPath, t);
+
+            alertDispatcher.timeout("metastoreRenameCleanup", Collections.singletonList(info.srcPath));
+
+            if(failOnTimeout) {
+                throw t;
+            }
+        } catch (Exception e) {
+            log.error("Error executing rename cleanup for paths from metastore: " + info.srcPath, e);
+
+            if(shouldFail(conf)) {
+                throw e;
+            }
+        }
+    }
+
+    private void renameCleanup(FileSystem fs, FileInfo info) throws Exception {
+        if (!info.isDirectory()) {
+            metastore.delete(info.getPath());
+            return;
+        }
+
+        List<FileInfo> metastoreFiles = metastore.list(Collections.singletonList(info.getPath()));
+        for (FileInfo fileInfo : metastoreFiles) {
+            renameCleanup(fs, fileInfo);
+        }
+        metastore.delete(info.getPath());
+    }
     
     @Pointcut
     public abstract void delete();
@@ -449,7 +629,7 @@ public abstract class ConsistentListingAspect {
             
         try {
             FileSystem s3fs = (FileSystem) pjp.getTarget();
-            
+
             Set<Path> filesToDelete = new HashSet<Path>();
             filesToDelete.add(deletePath);
             

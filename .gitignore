@@ -6,3 +6,5 @@ scripts/python/.project
 scripts/python/.pydevproject
 venv
 *.pyc
+*.iml
+/.idea/

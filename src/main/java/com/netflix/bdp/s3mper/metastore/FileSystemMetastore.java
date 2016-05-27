@@ -31,14 +31,19 @@ import org.apache.hadoop.fs.Path;
  */
 public interface FileSystemMetastore {
     
-    public void initalize(URI uri, Configuration conf) throws Exception;
+    void initalize(URI uri, Configuration conf) throws Exception;
     
-    public List<FileInfo> list(List<Path> path) throws Exception;
+    List<FileInfo> list(List<Path> paths) throws Exception;
+
+    void add(List<FileInfo> paths) throws Exception;
+    void add(Path path, boolean directory) throws Exception;
     
-    public void add(Path path, boolean directory) throws Exception;
-    
-    public void delete(Path path) throws Exception;
-    
-    public void close();
-    
+    void delete(Path path) throws Exception;
+    void delete(List<Path> paths) throws Exception;
+
+    void close();
+
+    int getTimeout();
+
+    void setTimeout(int timeout);
 }
