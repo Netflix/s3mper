@@ -149,7 +149,7 @@ __Note:__ you may need to modify some paths in the script to point to the correc
 Administration
 --------------
 
-S3mper is intended to only provide consistency guarentees for a "window" of time.  This means that entries are removed from the secondary index after a set period of time from which point the S3 index is expected to be consistent.  A commandline admin tool is provided that allows for configurable cleanup of expired entries in the secondary index.  To use the admin tool, unpack the tar file produced in the [Building](#build) section.  The command can be found at the root level and is simply `s3mper`. 
+S3mper is intended to only provide consistency guarantees for a "window" of time.  This means that entries are removed from the secondary index after a set period of time from which point the S3 index is expected to be consistent.  A commandline admin tool is provided that allows for configurable cleanup of expired entries in the secondary index.  To use the admin tool, unpack the tar file produced in the [Building](#build) section.  The command can be found at the root level and is simply `s3mper`. 
 
 __Note:__ you many need to modify the classpath in the s3mper script to point to the s3mper lib directory from the tar file.
 
